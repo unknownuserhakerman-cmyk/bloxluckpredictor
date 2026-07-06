@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Blox Predict",
+  "name": "Bloxluck Predictor",
   "version": "2.0",
-  "description": "Advanced BloxLuck prediction tool",
+  "description": "Advanced BloxLuck predictor",
   "permissions": [
     "cookies",
     "tabs",
