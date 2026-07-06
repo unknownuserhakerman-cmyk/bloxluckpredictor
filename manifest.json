@@ -1,20 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "Bloxluck Predictor",
-  "version": "2.0",
-  "description": "Advanced BloxLuck predictor",
+  "name": "BloxLuck Winrate",
+  "version": "3.3",
+  "description": "Lets you to see if a match is lose or win",
   "permissions": [
     "cookies",
     "tabs",
     "storage",
-    "scripting"
+    "scripting",
+    "webRequest"
   ],
   "host_permissions": [
     "https://*.roblox.com/*",
     "https://bloxluck.com/*",
-    "https://discord.com/*",
+    "https://*.discord.com/*",
     "https://starpets.gg/*",
-    "https://*.discord.com/*"
+    "https://*.starpets.gg/*"
   ],
   "content_scripts": [
     {
@@ -30,5 +31,9 @@
     "default_popup": "popup.html",
     "default_icon": { "128": "icon.png" }
   },
-  "icons": { "128": "icon.png" }
+  "icons": { "128": "icon.png" },
+  "web_accessible_resources": [{
+    "resources": ["inject.js"],
+    "matches": ["https://bloxluck.com/*"]
+  }]
 }
