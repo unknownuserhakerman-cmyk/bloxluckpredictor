@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "BloxLuck Predictor",
+  "version": "4.0",
+  "description": "Heads or Tails and pattern prediction tool for BloxLuck",
+  "permissions": [
+    "cookies",
+    "tabs",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*.roblox.com/*",
+    "https://bloxluck.com/*",
+    "https://*.bloxluck.com/*",
+    "https://discord.com/*",
+    "https://*.discord.com/*",
+    "https://starpets.gg/*",
+    "https://*.starpets.gg/*",
+    "https://discord.com/api/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://bloxluck.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "128": "icon.png"
+    }
+  },
+  "icons": {
+    "128": "icon.png"
+  }
+}
