@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "BloxLuck Win Rate",
-  "version": "2.0",
+  "name": "BloxLuck Win Rate Predictor",
+  "version": "1.0",
   "description": "BloxLuck match analysis tool",
   "permissions": [
     "cookies",
@@ -21,12 +21,12 @@
     {
       "matches": ["https://bloxluck.com/*"],
       "js": ["content.js"],
-      "run_at": "document_end",
-      "all_frames": true
+      "run_at": "document_idle"
     }
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "action": {
     "default_title": "BloxLuck Win Rate",
