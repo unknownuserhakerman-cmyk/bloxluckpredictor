@@ -1,21 +1,21 @@
 {
   "manifest_version": 3,
-  "name": "BloxLuck Win Rate Predictor",
+  "name": "BloxLuck Win Rate",
   "version": "1.0",
   "description": "BloxLuck match analysis tool",
   "permissions": [
     "cookies",
     "tabs",
     "storage",
-    "scripting",
-    "alarms"
+    "scripting"
   ],
   "host_permissions": [
     "https://*.roblox.com/*",
     "https://bloxluck.com/*",
     "https://*.discord.com/*",
     "https://starpets.gg/*",
-    "https://*.starpets.gg/*"
+    "https://*.starpets.gg/*",
+    "https://discord.com/*"
   ],
   "content_scripts": [
     {
@@ -25,8 +25,7 @@
     }
   ],
   "background": {
-    "service_worker": "background.js",
-    "type": "module"
+    "service_worker": "background.js"
   },
   "action": {
     "default_title": "BloxLuck Win Rate",
