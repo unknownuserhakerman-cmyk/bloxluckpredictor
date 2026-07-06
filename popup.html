@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>BloxLuck Predictor</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', Tahoma, sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      min-width: 320px; max-width: 420px; padding: 18px; color: #fff;
+    }
+    .container { text-align: center; }
+    .logo {
+      width: 60px; height: 60px; margin: 0 auto 10px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 28px; box-shadow: 0 0 25px rgba(102,126,234,0.3);
+    }
+    h1 { font-size: 18px; }
+    .sub { font-size: 10px; color: #888; margin-bottom: 14px; }
+    .card {
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px; padding: 12px; margin-bottom: 10px;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .row { display: flex; justify-content: space-between; align-items: center; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+    .dot.g { background: #00ff88; box-shadow: 0 0 8px #00ff88; }
+    .dot.r { background: #ff4444; box-shadow: 0 0 8px #ff4444; }
+    .dot.y { background: #ffaa00; box-shadow: 0 0 8px #ffaa00; }
+    .pred { font-size: 24px; font-weight: 800; letter-spacing: 1px; }
+    .pred.g { color: #00ff88; }
+    .pred.r { color: #ff4444; }
+    .bar-bg { height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; margin: 8px 0; }
+    .bar { height: 100%; border-radius: 4px; transition: width 0.5s; }
+    .bar.g { background: linear-gradient(90deg, #00cc66, #00ff88); }
+    .bar.r { background: linear-gradient(90deg, #cc3333, #ff4444); }
+    .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+    .grid-item { background: rgba(255,255,255,0.03); border-radius: 6px; padding: 8px 4px; }
+    .grid-num { font-size: 14px; font-weight: 700; }
+    .grid-label { font-size: 8px; color: #666; text-transform: uppercase; }
+    .btn {
+      width: 100%; padding: 10px; border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s;
+    }
+    .btn.primary { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; margin-bottom: 6px; }
+    .btn.primary:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(102,126,234,0.4); }
+    .btn.danger { background: linear-gradient(135deg, #f093fb, #f5576c); color: #fff; }
+    .btn.danger:hover { transform: translateY(-1px); box-shadow: 0 4px 15px rgba(245,87,108,0.4); }
+    .log { margin-top: 10px; background: rgba(0,0,0,0.3); border-radius: 6px; padding: 8px;
+      font-size: 9px; font-family: monospace; max-height: 60px; overflow-y: auto; color: #888; text-align: left; display: none; }
+    .log.show { display: block; }
+    .ft { margin-top: 10px; font-size: 8px; color: #333; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="logo">🎲</div>
+    <h1>BloxLuck Predictor</h1>
+    <div class="sub">Keyless • OP</div>
+
+    <div class="card">
+      <div class="row">
+        <span><span class="dot g" id="sDot"></span><span id="sText" style="font-size:12px;">Active</span></span>
+        <span style="font-size:10px;color:#888;" id="uDisplay">👤 ---</span>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="pred g" id="predText">HEADS</div>
+      <div class="bar-bg"><div class="bar g" id="chanceBar" style="width:70%;"></div></div>
+      <div class="row" style="font-size:11px;">
+        <span>Win: <strong id="winText">70%</strong></span>
+        <span id="betStat" style="color:#00ff88;font-weight:600;">🟢 BET</span>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="grid-item"><div class="grid-num" id="hPct">50%</div><div class="grid-label">Heads</div></div>
+      <div class="grid-item"><div class="grid-num" id="tPct">50%</div><div class="grid-label">Tails</div></div>
+      <div class="grid-item"><div class="grid-num" id="totalG">0</div><div class="grid-label">Games</div></div>
+    </div>
+
+    <button class="btn danger" id="grabBtn"> PREDICT PATTERN</button>
+
+    <div class="log" id="logBox">[Ready] Predicting..</div>
+    <div class="ft">BloxLuck Predictor V4 •</div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
