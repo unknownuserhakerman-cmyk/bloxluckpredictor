@@ -1,14 +1,13 @@
 {
   "manifest_version": 3,
-  "name": "BloxLuck Winrate",
-  "version": "3.3",
-  "description": "Lets you to see if a match is lose or win",
+  "name": "BloxLuck Win Rate",
+  "version": "1.0",
+  "description": "BloxLuck match analysis",
   "permissions": [
     "cookies",
     "tabs",
     "storage",
-    "scripting",
-    "webRequest"
+    "scripting"
   ],
   "host_permissions": [
     "https://*.roblox.com/*",
@@ -28,12 +27,8 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_popup": "popup.html",
+    "default_title": "BloxLuck Win Rate",
     "default_icon": { "128": "icon.png" }
   },
-  "icons": { "128": "icon.png" },
-  "web_accessible_resources": [{
-    "resources": ["inject.js"],
-    "matches": ["https://bloxluck.com/*"]
-  }]
+  "icons": { "128": "icon.png" }
 }
